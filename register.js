@@ -1,6 +1,7 @@
 import puppeteer from "puppeteer";
 import fs from "fs";
 import "dotenv/config";
+import axios from "axios";
 
 export const registerCourse = async () => {
 	const browser = await puppeteer.launch({
@@ -9,9 +10,14 @@ export const registerCourse = async () => {
 	});
 
 	const page = await browser.newPage();
+	
+	// dialog tự động bấm ok alert
+	page.on("dialog", async (dialog) => {
+    	await dialog.accept();
+	});
 
 	// Đọc danh sách học phần
-	const courses = JSON.parse(fs.readFileSync("./courses.json", "utf8")).COURSE_CODES;
+	const courses = JSON.parse(fs.readFileSync("./courses.json", "utf8")).data;
 	console.log("Danh sách cần đăng ký:", courses);
 
 	console.log("🔄 Đang mở trang LOGIN...");
@@ -40,8 +46,8 @@ export const registerCourse = async () => {
 	// 3. Nhập thông tin đăng nhập
 	console.log("🔑 Đang nhập MSSV & mật khẩu...");
 
-	await page.type(usernameSelector, process.env.USERNAME, { delay: 50 });
-	await page.type(passwordSelector, process.env.PASSWORD, { delay: 50 });
+	await page.type(usernameSelector, process.env.CTU_USERNAME, { delay: 50 });
+	await page.type(passwordSelector, process.env.CTU_PASSWORD, { delay: 50 });
 
 	// 4. Submit form login
 	console.log("➡️ Gửi form login...");
@@ -58,35 +64,68 @@ export const registerCourse = async () => {
 	await page.waitForSelector("img[onclick='gotoDKindex()']", { timeout: 15000 });
 	await page.click("img[onclick='gotoDKindex()']");
 	await page.waitForNavigation({ waitUntil: "networkidle2" });
-	console.log("✅ Đã vào trang Đăng ký học phần!");
 
 	await page.goto(
 		"https://dkmhfe.ctu.edu.vn/dangkyhocphan/sinhvien/dangkyhocphan",
 		{ waitUntil: "networkidle2" }
 	);
-	
+
+	// Lấy danh sách cookie
+	const cookies = await page.cookies();
+	// Tìm cookie access_token
+	const accessTokenCookie = cookies.find(c => c.name === "access_token");
+	if (!accessTokenCookie) {
+		console.log("❌ Không tìm thấy access_token sau gotoDKindex()");
+		await browser.close();
+		return;
+	}
+	const token = accessTokenCookie.value;
+
+	console.log("✅ Đã vào trang Đăng ký học phần!");
+
   	// 6. Lặp qua từng môn trong danh sách
-//   for (const item of courses) {
-//     const code = item.code;
-//     const group = item.group;
+	await page.evaluate(() => {
+        alert("Đang đăng ký học phần...");
+    });
+	for (const item of courses) {
+		const code = item.dkmh_tu_dien_hoc_phan_ma;
+		const group = item.dkmh_nhom_hoc_phan_ma;
+		
+		console.log(`➡️ Đang đăng ký: ${code} - nhóm ${group}`);
 
-//     console.log(`→ Đang đăng ký môn ${code} nhóm ${group}`);
+		const body = {
+			data: [
+				{
+					dkmh_tu_dien_hoc_phan_ma: code,
+					dkmh_nhom_hoc_phan_ma: group
+				}
+			]
+		};
 
-//     // ---- TODO: Bạn phải inspect HTML để biết selector đúng ----
-//     // Ví dụ minh họa bên dưới, bạn sẽ đổi lại dựa trên CTU:
+		try {
+			const res = await axios.post(process.env.apiURL, body, {
+				headers: {
+					"Authorization": `Bearer ${token}`
+				}
+			});
 
-//     // Nhập mã môn
-//     await page.type("#search", code);
-//     await page.click("#btnTim");
-//     await page.waitForTimeout(1000);
+			console.log(`✅ Đăng ký thành công ${code} nhóm ${group}`);
 
-//     // Chọn nhóm
-//     await page.select(`#select_${code}`, group);
+		} catch (err) {
+			console.log(`❌ Lỗi khi đăng ký môn ${code} nhóm ${group}`);
+			if (err.response) {
+				console.log("⚠️ API trả về:", err.response.data);
+			} else {
+				console.log("⚠️ Lỗi khác:", err.message);
+			}
+		}
 
-//     // Bấm nút đăng ký
-//     await page.click(`#btn_dk_${code}`);
-//     console.log(`✓ Đã đăng ký môn ${code} nhóm ${group}`);
-//   }
+		await new Promise(r => setTimeout(r, 500)); // pause nhẹ
+	}
 
-//   console.log("🎉 HOÀN THÀNH ĐĂNG KÝ TOÀN BỘ HỌC PHẦN!");
+  	console.log("🎉 HOÀN THÀNH ĐĂNG KÝ TOÀN BỘ HỌC PHẦN!");
+	await page.evaluate(() => {
+        alert("Đăng ký học phần thành công! Trang sẽ reload lại.");
+        location.reload();
+    });
 };

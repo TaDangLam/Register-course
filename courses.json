@@ -1,6 +1,7 @@
 {
-  "COURSE_CODES": [
-    { "code": "FL205", "group": "08" },
-    { "code": "SG283", "group": "06" }
+  "data": [
+    { "dkmh_tu_dien_hoc_phan_ma": "FL205", "dkmh_nhom_hoc_phan_ma": "08" },
+    { "dkmh_tu_dien_hoc_phan_ma": "FL219", "dkmh_nhom_hoc_phan_ma": "08" },
+    { "dkmh_tu_dien_hoc_phan_ma": "SG283", "dkmh_nhom_hoc_phan_ma": "06" }
   ]
 }
